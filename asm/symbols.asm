@@ -7,6 +7,8 @@
 .definelabel __osSiDeviceBusy, 0x800E4CE0
 .definelabel osContGetReadData, 0x800D4A24
 .definelabel osContStartReadData, 0x800D4960
+.definelabel osCreateThread, 0x800D2AD0
+.definelabel osStartThread, 0x800D2C20
 
 //functions
 .definelabel printText, 0x8007C8A4
@@ -18,3 +20,8 @@
 
 //data
 .definelabel decompressBuffer, 0x800E72C0
+.definelabel p1PressedButtons, 0x80181484
+.definelabel p1HeldButtons, 0x80181450
+.definelabel gameMode, 0x800F68D8
+.definelabel subGameMode, 0x800F68DC
+.definelabel debugBool, 0x800F06B0

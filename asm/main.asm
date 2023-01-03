@@ -3,8 +3,8 @@
 .include "asm/bootPatch.asm"
 .headersize 0x7F86E000
 .org 0x80401000
-.include "asm/customASM.asm"
 .include "asm/symbols.asm"
+.include "asm/customASM.asm"
 .importobj "obj/ct1.o"
 .importobj "obj/lz4.o"
 .importobj "obj/lib.o"

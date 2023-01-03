@@ -6,6 +6,20 @@ LW a1, 0x68D8 (a1)
 J 0x8008A8B0
 NOP
 
+getStatusRegister:
+MFC0 v0, $12
+NOP
+NOP
+JR RA
+NOP
+
+setStatusRegister:
+MTC0 a0, $12
+NOP
+NOP
+JR RA
+NOP
+
 __osDpDeviceBusy:
 LUI t6, 0xA410
 LW a0, 0x000C (t6)
