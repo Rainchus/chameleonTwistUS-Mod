@@ -8,7 +8,7 @@ extern s32 p1PressedButtons;
 extern s32 p1HeldButtons;
 extern s32 gameMode;
 extern s32 subGameMode;
-extern s32 debugBool;
+//extern s32 debugBool;
 
 #define DPAD_UP 0x08000000
 #define DPAD_DOWN 0x04000000

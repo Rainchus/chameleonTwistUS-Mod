@@ -24,4 +24,3 @@
 .definelabel p1HeldButtons, 0x80181450
 .definelabel gameMode, 0x800F68D8
 .definelabel subGameMode, 0x800F68DC
-.definelabel debugBool, 0x800F06B0

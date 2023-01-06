@@ -32,6 +32,8 @@ s32 savestate3Size = 0;
 
 s32 isMenuActive = 0;
 
+s32 isSaveOrLoadActive = 0;
+
 typedef struct CustomThread {
     /* 0x000 */ OSThread thread;
     /* 0x1B0 */ char stack[0xC000];
@@ -44,6 +46,10 @@ typedef struct CustomThread {
 
 CustomThread gCustomThread = {0};
 
+void cBootFunction(void) {
+    isSaveOrLoadActive = 0;
+}
+
 int __osPiDeviceBusy() {
     register u32 stat = IO_READ(PI_STATUS_REG);
     if (stat & (PI_STATUS_DMA_BUSY | PI_STATUS_IO_BUSY))
@@ -52,6 +58,7 @@ int __osPiDeviceBusy() {
 }
 
 void loadstateMain(void) {
+    isSaveOrLoadActive = 1;
     s32 register status = getStatusRegister();
     //wait on rsp
     while (__osSpDeviceBusy() == 1) {}
@@ -90,9 +97,12 @@ void loadstateMain(void) {
 
     setStatusRegister(status);
     __osRestoreInt();
+    isSaveOrLoadActive = 0;
 }
     
 void savestateMain(void) {
+    isSaveOrLoadActive = 1;
+
     //push status
     s32 register status = getStatusRegister();
     //wait on rsp
@@ -125,6 +135,7 @@ void savestateMain(void) {
     }
     setStatusRegister(status);
     __osRestoreInt();
+    isSaveOrLoadActive= 0;
 }
 
 void checkInputsForSavestates(void) {
@@ -183,9 +194,13 @@ void printSaveOrLoad(void) {
 }
 
 void mainCFunction(void) {
+    // if (debugBool == 0xFFFFFFFF) {
+    //     debugBool = 0;
+    // }
+
     if (stateCooldown == 0) {
         if ((p1HeldButtons & R_BUTTON) && (p1PressedButtons & DPAD_UP)) {
-            debugBool ^= 1;
+            //debugBool ^= 1;
         } else if ((p1HeldButtons & R_BUTTON) && (p1PressedButtons & DPAD_DOWN)) {
             isMenuActive ^= 1;
         } else if (p1PressedButtons & DPAD_DOWN) {
@@ -200,4 +215,6 @@ void mainCFunction(void) {
     }
 
     printSaveOrLoad();
+
+    while (isSaveOrLoadActive != 0) {}
 }

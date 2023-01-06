@@ -22,6 +22,8 @@ NOP
 .headersize 0x7F86E000
 .org 0x80400000
 originalCode:
+JAL cBootFunction
+NOP
 //restore from hook and jump back
 LUI v0, 0x800F
 LW v0, 0xA0A8 (v0)
