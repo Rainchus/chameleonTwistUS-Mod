@@ -220,10 +220,6 @@ void checkInputsForSavestates(void) {
                 stateCooldown = 5;
                 return;
             }
-        } else if (D_80181450[0].button & CONT_DOWN) {
-            stateCooldown = 8;
-            savestateCurrentSlot ^= 1; //flip from 0 to 1 or vice versa (2 saveslots)
-            return;
         }
     }
 }
@@ -368,7 +364,9 @@ void mainCFunction(void) {
     } else if ((D_80181450[0].button & CONT_R) && (currentlyPressedButtons & CONT_DOWN)) {
         isMenuActive ^= 1;
     } else if (currentlyPressedButtons & CONT_DOWN) {
-        savestateCurrentSlot ^= 1; //flip from 0 to 1 or vice versa (2 saveslots)
+        if (isMenuActive == 0) {
+            savestateCurrentSlot ^= 1; //flip from 0 to 1 or vice versa (2 saveslots)
+        }
     }
     
     if (stateCooldown > 0) {
