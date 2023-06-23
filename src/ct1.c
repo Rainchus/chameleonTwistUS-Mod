@@ -1,6 +1,27 @@
 #include "../include/ct1.h"
 #include "../include/OS.h"
 
+typedef struct {
+	u16     button;
+	s8      stick_x;		/* -80 <= stick_x <= 80 */
+	s8      stick_y;		/* -80 <= stick_y <= 80 */
+	u8	errno;
+} OSContPad;
+
+#define CONT_A      0x8000
+#define CONT_B      0x4000
+#define CONT_G	    0x2000
+#define CONT_START  0x1000
+#define CONT_UP     0x0800
+#define CONT_DOWN   0x0400
+#define CONT_LEFT   0x0200
+#define CONT_RIGHT  0x0100
+#define CONT_L      0x0020
+#define CONT_R      0x0010
+#define CONT_E      0x0008
+#define CONT_D      0x0004
+#define CONT_C      0x0002
+#define CONT_F      0x0001
 #define SAVE_MODE 0
 #define LOAD_MODE 1
 #define ARRAY_COUNT(arr) (s32)(sizeof(arr) / sizeof(arr[0]))
@@ -12,15 +33,14 @@
 
 #define ramAddrSavestateDataSlot1 (void*)0x804C0000
 #define ramAddrSavestateDataSlot2 (void*)0x805D0000
-#define ramAddrSavestateDataSlot3 (void*)0x806E0000 //hopefully doesn't overflow into 0x807FFFDC (though if it does we were screwed anyway)
-#define DPAD_LEFT_CASE 0
-#define DPAD_UP_CASE 1
-#define DPAD_RIGHT_CASE 2
-
+#define savestateBackup (void*)0x806E0000
+#define MAXCONTROLLERS 4
+extern OSContPad D_80181450[MAXCONTROLLERS];
+s32 saveStateBackupSize = 0;
 extern int getStatusRegister(void); //returns status reg
 extern int setStatusRegister(s32); //returns status reg
-void __osDisableInt(void);
-void __osRestoreInt(void);
+s32 __osDisableInt(void);
+void __osRestoreInt(u32);
 
 s32 savestateCurrentSlot = 0;
 s32 stateCooldown = 0;
@@ -57,9 +77,8 @@ int __osPiDeviceBusy() {
     return 0;
 }
 
-void loadstateMain(void) {
-    isSaveOrLoadActive = 1;
-    s32 register status = getStatusRegister();
+void loadstateMainBackup(void) {
+    u32 saveMask;
     //wait on rsp
     while (__osSpDeviceBusy() == 1) {}
 
@@ -75,36 +94,52 @@ void loadstateMain(void) {
     //invalidate caches
     osInvalICache((void*)0x80000000, 0x2000);
 	osInvalDCache((void*)0x80000000, 0x2000);
-    __osDisableInt();
+    saveMask = __osDisableInt();
+
+    decompress_lz4_ct_default(ramEndAddr - ramStartAddr, saveStateBackupSize, savestateBackup);
+
+    __osRestoreInt(saveMask);
+    isSaveOrLoadActive = 0; //allow thread 3 to continue
+}
+
+void loadstateMain(void) {
+    u32 saveMask;
+    //wait on rsp
+    while (__osSpDeviceBusy() == 1) {}
+
+    //wait on rdp
+    while ( __osDpDeviceBusy() == 1) {}
+
+    //wait on SI
+    while (__osSiDeviceBusy() == 1) {}
+
+    //wait on PI
+    while (__osPiDeviceBusy() == 1) {}
+
+    //invalidate caches
+    osInvalICache((void*)0x80000000, 0x2000);
+	osInvalDCache((void*)0x80000000, 0x2000);
+    saveMask = __osDisableInt();
 
     switch (savestateCurrentSlot) {
-        case DPAD_LEFT_CASE:
+        case 0: //dpad left
             if (savestate1Size != 0 && savestate1Size != -1) {
-                decompress_lz4_ct_default(ramEndAddr - ramStartAddr, savestate1Size, ramAddrSavestateDataSlot1); //always decompresses to `ramStartAddr`
-            }  
-        break;
-        case DPAD_UP_CASE:
-            if (savestate2Size != 0 && savestate2Size != -1) {
-                decompress_lz4_ct_default(ramEndAddr - ramStartAddr, savestate2Size, ramAddrSavestateDataSlot2); //always decompresses to `ramStartAddr`
+                decompress_lz4_ct_default(ramEndAddr - ramStartAddr, savestate1Size, ramAddrSavestateDataSlot1);
             }
-        break;
-        case DPAD_RIGHT_CASE:
-            if (savestate3Size != 0 && savestate3Size != -1) {
-                decompress_lz4_ct_default(ramEndAddr - ramStartAddr, savestate3Size, ramAddrSavestateDataSlot3); //always decompresses to `ramStartAddr`
-            }  
-        break;
+            break;
+        case 1:
+            if (savestate2Size != 0 && savestate2Size != -1) {
+                decompress_lz4_ct_default(ramEndAddr - ramStartAddr, savestate2Size, ramAddrSavestateDataSlot2);
+            }
+            break;
     }
 
-    setStatusRegister(status);
-    __osRestoreInt();
-    isSaveOrLoadActive = 0;
+    __osRestoreInt(saveMask);
+    isSaveOrLoadActive = 0; //allow thread 3 to continue
 }
     
 void savestateMain(void) {
-    isSaveOrLoadActive = 1;
-
-    //push status
-    s32 register status = getStatusRegister();
+    u32 saveMask;
     //wait on rsp
     while (__osSpDeviceBusy() == 1) {}
 
@@ -121,100 +156,126 @@ void savestateMain(void) {
     osInvalICache((void*)0x80000000, 0x2000);
 	osInvalDCache((void*)0x80000000, 0x2000);
 
-    __osDisableInt();
+    saveMask = __osDisableInt();
+
     switch (savestateCurrentSlot) {
-        case DPAD_LEFT_CASE:
-            savestate1Size = compress_lz4_ct_default(ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot1);
+        case 0:
+            if (savestate1Size == 0) {
+                if (savestate2Size == 0) {
+                    //both states blank, create state
+                    savestate1Size = compress_lz4_ct_default((void*)ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot1);
+                } else {
+                    //savestate 1 isn't initialized but savestate 2 is, therefore backup state 2
+                    optimized_memcpy(savestateBackup, ramAddrSavestateDataSlot2, savestate2Size);
+                    saveStateBackupSize = savestate2Size;
+                    savestate1Size = compress_lz4_ct_default((void*)ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot1);
+                }
+            } else {
+                //savestate 1 is already created, therefore backup state 1
+                optimized_memcpy(savestateBackup, ramAddrSavestateDataSlot1, savestate1Size);
+                saveStateBackupSize = savestate1Size;
+                savestate1Size = compress_lz4_ct_default((void*)ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot1);                
+            }
         break;
-        case DPAD_UP_CASE:
-            savestate2Size = compress_lz4_ct_default(ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot2);
-        break;
-        case DPAD_RIGHT_CASE:
-            savestate3Size = compress_lz4_ct_default(ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot3);
+
+        case 1:
+            if (savestate2Size == 0) {
+                if (savestate1Size == 0) {
+                    //both states blank, create state
+                    savestate2Size = compress_lz4_ct_default((void*)ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot2);
+                } else {
+                    //savestate 2 isn't initialized but savestate 2 is, therefore backup state 1
+                    optimized_memcpy(savestateBackup, ramAddrSavestateDataSlot1, savestate1Size);
+                    saveStateBackupSize = savestate1Size;
+                    savestate2Size = compress_lz4_ct_default((void*)ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot2);
+                }
+            } else {
+                //savestate 2 is already created, therefore backup state 2
+                optimized_memcpy(savestateBackup, ramAddrSavestateDataSlot2, savestate2Size);
+                saveStateBackupSize = savestate2Size;
+                savestate2Size = compress_lz4_ct_default((void*)ramStartAddr, ramEndAddr - ramStartAddr, ramAddrSavestateDataSlot2);                
+            }
         break;
     }
-    setStatusRegister(status);
-    __osRestoreInt();
-    isSaveOrLoadActive= 0;
+    
+    __osRestoreInt(saveMask);
+    isSaveOrLoadActive = 0; //allow thread 3 to continue
 }
 
 void checkInputsForSavestates(void) {
-    savestateCurrentSlot = -1;//set to invalid
-
-    if (p1PressedButtons & DPAD_LEFT) {
-        savestateCurrentSlot = 0;
-    }
-
-    if (p1PressedButtons & DPAD_UP) {
-        savestateCurrentSlot = 1;
-    }
-
-    if (p1PressedButtons & DPAD_RIGHT) {
-        savestateCurrentSlot = 2;
-    }
-
-    if (savestateCurrentSlot == -1 || stateCooldown != 0){
+    if (stateCooldown != 0){
         return;
     }
 
-    if (gameMode != GAME_MODE_STAGE_SELECT &&
-    gameMode != GAME_MODE_NEW_GAME_MENU &&
-    gameMode != GAME_MODE_TITLE_SCREEN &&
-    gameMode != GAME_MODE_JUNGLE_LAND_MENU) {
-        if (saveOrLoadStateMode == SAVE_MODE) {
+    if (gameMode != GAME_MODE_STAGE_SELECT && gameMode != GAME_MODE_NEW_GAME_MENU &&
+        gameMode != GAME_MODE_TITLE_SCREEN && gameMode != GAME_MODE_JUNGLE_LAND && gIsPaused == 0)
+    {
+        if (D_80181450[0].button & CONT_LEFT) {
+            isSaveOrLoadActive = 1;
             osCreateThread(&gCustomThread.thread, 255, (void*)savestateMain, NULL,
                     gCustomThread.stack + sizeof(gCustomThread.stack), 255);
             osStartThread(&gCustomThread.thread);
             stateCooldown = 5;
-        } else {
+        } else if (D_80181450[0].button & CONT_RIGHT) {
+            isSaveOrLoadActive = 1;
             osCreateThread(&gCustomThread.thread, 255, (void*)loadstateMain, NULL,
                     gCustomThread.stack + sizeof(gCustomThread.stack), 255);
             osStartThread(&gCustomThread.thread);
-            stateCooldown = 5;            
+            stateCooldown = 5;   
+        } else if (D_80181450[0].button & CONT_UP) {
+            if (saveStateBackupSize != 0) {
+                isSaveOrLoadActive = 1;
+                osCreateThread(&gCustomThread.thread, 255, (void*)loadstateMainBackup, NULL,
+                        gCustomThread.stack + sizeof(gCustomThread.stack), 255);
+                osStartThread(&gCustomThread.thread);
+                stateCooldown = 5;
+            }
+        } else if (D_80181450[0].button & CONT_DOWN) {
+            stateCooldown = 8;
+            savestateCurrentSlot ^= 1; //flip from 0 to 1 or vice versa (2 saveslots)
         }
     }
 }
 
-// Wrapper for in game printText()
-void textPrint(f32 xPos, f32 yPos, f32 scale, void *text, s32 num) {
+// Wrapper for in game Text()
+void TextPrint(f32 xPos, f32 yPos, f32 scale, void *text, s32 num) {
     printText(xPos, yPos, 0, scale, 0, 0, text, num);
 }
 
-void printSaveOrLoad(void) {
-    char message[10];
-    if (saveOrLoadStateMode == SAVE_MODE) {
-        message[0] =  0xA3;
-        message[1] = 0x60 + 's';
+void PrintStateSlotText(void) {
+    s32 index = 0;
+    char textBuffer[8];
+    if (savestateCurrentSlot == 0) {
+        textBuffer[index++] =  0xA3;
+        textBuffer[index++] = 0xB1; //s 1
     } else {
-        message[0] = 0xA3;
-        message[1] = 0x60 + 'l';
+        textBuffer[index++] =  0xA3;
+        textBuffer[index++] = 0xB2; //s 2         
     }
-    message[2] = 0;
-    textPrint(13.0f, 208.0f, 0.65f, &message, 3);
+
+    textBuffer[index++] = 0;
+    TextPrint(13.0f, 208.0f, 0.65f, &textBuffer, 3);
 }
 
+extern u8 D_8020850E;
+extern u8 D_80208510;
+
 void mainCFunction(void) {
+    D_8020850E = 0xFF; //unlock levels
+    D_80208510 = 0xFF; //unlock levels
     // if (debugBool == 0xFFFFFFFF) {
     //     debugBool = 0;
     // }
-
-    if (stateCooldown == 0) {
-        if ((p1HeldButtons & R_BUTTON) && (p1PressedButtons & DPAD_UP)) {
-            //debugBool ^= 1;
-        } else if ((p1HeldButtons & R_BUTTON) && (p1PressedButtons & DPAD_DOWN)) {
-            isMenuActive ^= 1;
-        } else if (p1PressedButtons & DPAD_DOWN) {
-            saveOrLoadStateMode ^= 1;
-        } else {
-            checkInputsForSavestates();
-        }
-    }
 
     if (stateCooldown > 0) {
         stateCooldown--;
     }
 
-    printSaveOrLoad();
+    if (isMenuActive == 0 ) {
+        checkInputsForSavestates();
+    }
+    
+    PrintStateSlotText();
 
     while (isSaveOrLoadActive != 0) {}
 }

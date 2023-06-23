@@ -24,3 +24,7 @@
 .definelabel p1HeldButtons, 0x80181450
 .definelabel gameMode, 0x800F68D8
 .definelabel subGameMode, 0x800F68DC
+.definelabel D_80181450, 0x80181450
+.definelabel D_8020850E, 0x8020850E
+.definelabel D_80208510, 0x80208510
+.definelabel gIsPaused, 0x801813F4

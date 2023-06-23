@@ -27,11 +27,12 @@ int __osSpDeviceBusy();
 int __osSiDeviceBusy();
 
 //user functions
+void optimized_memcpy(void* destination, const void* source, u32 num_bytes);
 void decompress_lz4_ct_default(int srcSize, int savestateCompressedSize, u8* compressBuffer);
 s32 compress_lz4_ct_default(const u8* srcData, int srcSize, u8* bufferAddr);
 void* my_memmove(void* dest, const void* src, int n);
 void printText(f32 xPos, f32 yPos, f32 zero, f32 scale, f32 zero2, f32 zero3, void* text, s32);
-
+extern s32 gIsPaused;
 extern char decompressBuffer[0x803B5000 - 0x800EE1C0];
 
 #endif
