@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "types.h": "c"
+        "types.h": "c",
+        "ct1.h": "c",
+        "menu.h": "c",
+        "stdarg.h": "c"
     }
 }

@@ -17,6 +17,10 @@
 .definelabel ct_strlen, 0x800E503C
 .definelabel ct_strchr, 0x800E5064
 .definelabel ct_memcpy, 0x800E5010
+.definelabel SetTextGradient, 0x8005FB80
+.definelabel _Printf, 0x800DEEC0
+
+.definelabel PrintIGT, 0x800846D8
 
 //data
 .definelabel decompressBuffer, 0x800E72C0
@@ -28,3 +32,5 @@
 .definelabel D_8020850E, 0x8020850E
 .definelabel D_80208510, 0x80208510
 .definelabel gIsPaused, 0x801813F4
+.definelabel gPlayerActors, 0x80174C28
+.definelabel gCamera, 0x80176918

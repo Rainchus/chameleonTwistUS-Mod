@@ -8,4 +8,6 @@
 .importobj "obj/ct1.o"
 .importobj "obj/lz4.o"
 .importobj "obj/lib.o"
+.importobj "obj/menu.o"
+.importobj "obj/text.o"
 .close // Close the ROM file
